@@ -22,13 +22,13 @@ dp = Dispatcher(bot, storage=MemoryStorage())
 drivers = {}
 
 try:
-    D=pd.read_csv('/home/nzg21/telegrambit/askar_taxi/D.csv', index_col=0)
+    D=pd.read_csv('D.csv', index_col=0)
 except:
     D = pd.DataFrame(columns=["name", "auto_name", "gos_num", "count", "tel_num"])
 
 
 try:
-    P = pd.read_csv("askar_taxi/P.csv", index_col=0)
+    P = pd.read_csv("P.csv", index_col=0)
 except:
     P=pd.DataFrame(columns=['tel_num', 'count'],)
 
@@ -247,8 +247,8 @@ async def finish_road(call, state):
     await call.message.answer(f"+1 поездка. Всего поездок: {D.loc[driv_id]['count']}")
 
     await bot.send_message(pas_id, "Мы приехали! Спасибо что выбрали нас🎈")
-    D.to_csv('askar_taxi/D.csv', index=True)
-    P.to_csv('askar_taxi/P.csv', index=True)
+    D.to_csv('D.csv', index=True)
+    P.to_csv('P.csv', index=True)
 
 
 
@@ -320,7 +320,7 @@ async def confirm_driver(call, state):
         D.drop([id], inplace=True)
 
     D.loc[driver.id] = [driver.name, driver.auto_name, driver.gos_num, driver.count, driver.tel_num]
-    D.to_csv('askar_taxi/D.csv', index=True)
+    D.to_csv('D.csv', index=True)
     
     del drivers[id]
     await call.message.answer("Вы Зарегистрированы!")
