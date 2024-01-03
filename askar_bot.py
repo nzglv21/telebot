@@ -5,7 +5,6 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.utils import executor
 from contextlib import suppress
 from markups import *
-import pickle
 import pandas as pd
 
 from aiogram.utils.exceptions import (MessageToEditNotFound, MessageCantBeEdited, MessageCantBeDeleted,
@@ -15,6 +14,7 @@ from aiogram.utils.exceptions import (MessageToEditNotFound, MessageCantBeEdited
 
 TOKEN='6903931597:AAFB6D9PBxcTKCep3hK2daB8NdgMDZ_m5lA'
 CHANEL_ID = "-1002012883717"
+ORDERS_ID = "-1002010880352"
 bot = Bot(TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 
@@ -67,10 +67,7 @@ class Driver:
 
 d={}
 
-print(D)
-print(P)
-
-
+driver_state = {}
 
 @dp.message_handler(commands=['start'],state='*')
 async def start(message, state):
@@ -191,25 +188,36 @@ async def confirm_order(call, state):
     chanel_markup = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("Взять заказ", callback_data="@"+str(id)))
     await bot.send_message(CHANEL_ID, formatted_message, parse_mode='HTML', reply_markup=chanel_markup)
 
-class DriverStates(StatesGroup):
-    Start = State()
 
 @dp.callback_query_handler(lambda call: call.data[0] =='@', state = '*')
 async def take_order(call, state):
     id = call['from']['id']
-    if id in D.index:
-        pas_id = int(call.data[1:])
-        with suppress(MessageCantBeDeleted, MessageToDeleteNotFound):
-            await call.message.delete()
+    f = 1
+    if id in driver_state:
+        if driver_state[id]!=0:
+            await bot.send_message(id, "Вы не завершили прошлую поездку!")
+            f=0
 
-        markup_arrived = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("Подъехал", callback_data="#"+str(pas_id)))
-        driver_info = D.loc[id]
+    if (id in D.index):
+        if f:
+            driver_state[id]=1
+            pas_id = int(call.data[1:])
+            with suppress(MessageCantBeDeleted, MessageToDeleteNotFound):
+                await call.message.delete()
 
-        await bot.send_message(pas_id, "🚕Ваш заказ принят🚕\nВодитель уже в пути")
-        await bot.send_sticker(pas_id, 'CAACAgUAAxkBAAECprNljoogWWGO9pFvHGL7-1T7BJY-dAACrgIAAsMX6VRLN8FunfjfiDQE')
-        await bot.send_message(pas_id, f"<b>Информация о водителеℹ\nФИО:</b> {driver_info['name']}\n<b>Номер телефона:</b> {driver_info['tel_num']}\n<b>Инфо о машине:</b> {driver_info['auto_name']}\n<b>ГосНомер:</b> {driver_info['gos_num']}", parse_mode='HTML')
-        await bot.send_location(id, d[pas_id].location.latitude, d[pas_id].location.longitude)
-        await bot.send_message(call['from']['id'], "Ваш заказ:\n"+call.message.text, parse_mode='HTML', reply_markup=markup_arrived)
+            markup_arrived = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("Подъехал", callback_data="#"+str(pas_id)))
+            driver_info = D.loc[id]
+            if pas_id in P.index:
+                if (P.at[pas_id, 'count']+1)%7 == 1:
+                    await bot.send_message(pas_id, "<b>Ваша поездка будет за наш cчет!</b>", parse_mode='HTML')
+                    await bot.send_message(id, "Поездка за счет заведения")
+                    await bot.send_message(ORDERS_ID, "Поездка за счет такси")
+            await bot.send_message(pas_id, "🚕Ваш заказ принят🚕\nВодитель уже в пути")
+            await bot.send_sticker(pas_id, 'CAACAgUAAxkBAAECprNljoogWWGO9pFvHGL7-1T7BJY-dAACrgIAAsMX6VRLN8FunfjfiDQE')
+            await bot.send_message(pas_id, f"<b>Информация о водителеℹ\nФИО:</b> {driver_info['name']}\n<b>Номер телефона:</b> {driver_info['tel_num']}\n<b>Инфо о машине:</b> {driver_info['auto_name']}\n<b>ГосНомер:</b> {driver_info['gos_num']}", parse_mode='HTML')
+            await bot.send_location(id, d[pas_id].location.latitude, d[pas_id].location.longitude)
+            await bot.send_message(call['from']['id'], "Ваш заказ:\n"+call.message.text, parse_mode='HTML', reply_markup=markup_arrived)
+            await bot.send_message(ORDERS_ID, call.message.text, parse_mode = HTML)
     else:
         await bot.send_message(id, "Вы не зарегестрированы! Нажмите /new_driver")
 
@@ -219,9 +227,7 @@ async def driver_come(call, state):
     pas_id = int(call.data[1:])
     with suppress(MessageCantBeDeleted, MessageToDeleteNotFound):
         await call.message.delete()
-
     markup_finish = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("Завершить поездку", callback_data="^"+str(pas_id)))
-
     await call.message.answer(call.message.text, reply_markup=markup_finish)
     await bot.send_message(pas_id, "🚖Водитель ожидает вас🚖\nМожете выходить")
 
@@ -245,16 +251,10 @@ async def finish_road(call, state):
         await call.message.delete()
 
     await call.message.answer(f"+1 поездка. Всего поездок: {D.loc[driv_id]['count']}")
-
+    driver_state[driv_id] = 0
     await bot.send_message(pas_id, "Мы приехали! Спасибо что выбрали нас🎈")
     D.to_csv('D.csv', index=True)
     P.to_csv('P.csv', index=True)
-
-
-
-
-
-
 
 
 
@@ -325,19 +325,12 @@ async def confirm_driver(call, state):
     del drivers[id]
     await call.message.answer("Вы Зарегистрированы!")
     await state.finish()
-    print(D)
 
 @dp.callback_query_handler(lambda call:call.data == '0', state=DriverState.ConfirmOrder)
 async def zero_conf(call, state):
     with suppress(MessageCantBeDeleted, MessageToDeleteNotFound):
         await call.message.delete()
     await call.message.answer("Если хотите начать сначала введите /new_driver")
-
-
-
-
-
-
 
 
 
